@@ -1,0 +1,19 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: traininghub
+      POSTGRES_USER: traininghub
+      POSTGRES_PASSWORD: traininghub
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U traininghub -d traininghub"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_dev_data:

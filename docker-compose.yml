@@ -1,0 +1,43 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: traininghub
+      POSTGRES_USER: traininghub
+      POSTGRES_PASSWORD: traininghub
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U traininghub -d traininghub"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  app:
+    build:
+      context: .
+      args:
+        VITE_API_BASE_URL: /api
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://traininghub:traininghub@db:5432/traininghub
+      JWT_SECRET: local-demo-change-me
+      JWT_ACCESS_MINUTES: 30
+      JWT_REFRESH_DAYS: 14
+      CORS_ORIGINS: http://localhost:8000,http://127.0.0.1:8000,http://localhost:5173,http://127.0.0.1:5173
+      MAIL_ENABLED: "false"
+      FRONTEND_URL: http://localhost:8000
+      MEDIA_ROOT: /app/media
+      MEDIA_URL: /media
+      RUN_MIGRATIONS: "true"
+      SEED_DEMO_DATA: "true"
+    ports:
+      - "8000:8000"
+    volumes:
+      - app_media:/app/media
+
+volumes:
+  postgres_data:
+  app_media:
