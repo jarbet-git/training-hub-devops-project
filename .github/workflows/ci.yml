@@ -15,7 +15,7 @@ jobs:
     env:
       DATABASE_URL: "sqlite+pysqlite:///:memory:"
       JWT_SECRET: "ci-test-secret"
-      APP_VERSION: "ci"
+      APP_VERSION: "test-version"
 
     steps:
       - name: Checkout repository
