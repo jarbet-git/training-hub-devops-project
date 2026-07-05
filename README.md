@@ -226,10 +226,10 @@ Amazon ECR → Amazon ECS Fargate → Application Load Balancer
 Public application URL:
 
 ```text
-<PUBLIC_APPLICATION_URL>
+http://training-hub-alb-1068184646.eu-central-1.elb.amazonaws.com
 ```
 
-Replace `<PUBLIC_APPLICATION_URL>` with the Application Load Balancer URL returned by Terraform output:
+Replace `http://training-hub-alb-1068184646.eu-central-1.elb.amazonaws.com` with the Application Load Balancer URL returned by Terraform output:
 
 ```bash
 cd infra
@@ -239,9 +239,9 @@ terraform output application_url
 Example production checks:
 
 ```bash
-curl <PUBLIC_APPLICATION_URL>/health
-curl <PUBLIC_APPLICATION_URL>/version
-curl <PUBLIC_APPLICATION_URL>/training-process
+curl http://training-hub-alb-1068184646.eu-central-1.elb.amazonaws.com/health
+curl http://training-hub-alb-1068184646.eu-central-1.elb.amazonaws.com/version
+curl http://training-hub-alb-1068184646.eu-central-1.elb.amazonaws.com/training-process
 ```
 
 ## Observability
@@ -340,7 +340,7 @@ After the pipeline finishes, the public `/version` endpoint should return the ne
 Example check:
 
 ```bash
-curl <PUBLIC_APPLICATION_URL>/version
+curl http://training-hub-alb-1068184646.eu-central-1.elb.amazonaws.com/version
 ```
 
 ## Repository structure
