@@ -9,6 +9,7 @@ on:
 jobs:
   test-build-push-deploy:
     runs-on: ubuntu-latest
+    environment: production
 
     env:
       DATABASE_URL: "sqlite+pysqlite:///:memory:"
@@ -19,10 +20,25 @@ jobs:
       ECR_REPOSITORY: "${{ secrets.ECR_REPOSITORY }}"
       ECS_CLUSTER: "${{ secrets.ECS_CLUSTER }}"
       ECS_SERVICE: "${{ secrets.ECS_SERVICE }}"
+      APP_PUBLIC_URL: "${{ vars.APP_PUBLIC_URL }}"
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Read application version
+        run: |
+          APP_IMAGE_TAG="$(tr -d '[:space:]' < VERSION)"
+          if [ -z "$APP_IMAGE_TAG" ]; then
+            echo "VERSION file is empty"
+            exit 1
+          fi
+          if ! echo "$APP_IMAGE_TAG" | grep -Eq '^[A-Za-z0-9_.-]+$'; then
+            echo "Invalid Docker tag in VERSION: $APP_IMAGE_TAG"
+            exit 1
+          fi
+          echo "APP_IMAGE_TAG=$APP_IMAGE_TAG" >> "$GITHUB_ENV"
+          echo "Deploying application version: $APP_IMAGE_TAG"
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -38,6 +54,23 @@ jobs:
       - name: Run backend tests
         working-directory: backend
         run: pytest
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: |
+          npm config set registry https://registry.npmjs.org/
+          npm ci
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -55,23 +88,44 @@ jobs:
 
       - name: Tag Docker image for ECR
         run: |
-          docker tag training-hub:latest ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}:latest
+          IMAGE_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}"
+          docker tag training-hub:latest "${IMAGE_URI}:latest"
+          docker tag training-hub:latest "${IMAGE_URI}:${APP_IMAGE_TAG}"
 
       - name: Push Docker image to ECR
         run: |
-          docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}:latest
+          IMAGE_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}"
+          docker push "${IMAGE_URI}:latest"
+          docker push "${IMAGE_URI}:${APP_IMAGE_TAG}"
 
       - name: Force new ECS deployment
         run: |
           aws ecs update-service \
-            --cluster ${ECS_CLUSTER} \
-            --service ${ECS_SERVICE} \
+            --cluster "${ECS_CLUSTER}" \
+            --service "${ECS_SERVICE}" \
             --force-new-deployment \
-            --region ${AWS_REGION}
+            --region "${AWS_REGION}"
 
       - name: Wait for ECS service stability
         run: |
           aws ecs wait services-stable \
-            --cluster ${ECS_CLUSTER} \
-            --services ${ECS_SERVICE} \
-            --region ${AWS_REGION}
+            --cluster "${ECS_CLUSTER}" \
+            --services "${ECS_SERVICE}" \
+            --region "${AWS_REGION}"
+
+      - name: Run smoke tests
+        run: |
+          if [ -z "${APP_PUBLIC_URL}" ]; then
+            echo "APP_PUBLIC_URL variable is not set"
+            exit 1
+          fi
+
+          echo "Running smoke tests against ${APP_PUBLIC_URL}"
+
+          curl --fail --retry 12 --retry-delay 10 --retry-all-errors "${APP_PUBLIC_URL}/health"
+
+          VERSION_RESPONSE="$(curl --fail --retry 12 --retry-delay 10 --retry-all-errors "${APP_PUBLIC_URL}/version")"
+          echo "Version response: ${VERSION_RESPONSE}"
+          echo "${VERSION_RESPONSE}" | grep "${APP_IMAGE_TAG}"
+
+          curl --fail --retry 12 --retry-delay 10 --retry-all-errors "${APP_PUBLIC_URL}/training-process"

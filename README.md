@@ -380,3 +380,15 @@ The screen recording should show:
 - CloudWatch Logs,
 - working `/health`, `/version` and `/training-process` endpoints,
 - CI/CD demonstration after changing the `VERSION` file.
+
+## Additional DevOps features
+
+The project includes several additional DevOps practices:
+
+- Docker images are tagged both as `latest` and with the version from the `VERSION` file.
+- The deployment job uses the GitHub Environment named `production`.
+- After ECS finishes the rollout, the workflow runs smoke tests against the public ALB URL.
+- Smoke tests verify `/health`, `/version` and `/training-process`.
+- Terraform creates a CloudWatch dashboard for basic ECS, ALB and log visibility.
+
+The public application URL is stored as a GitHub Actions environment variable named `APP_PUBLIC_URL`.
