@@ -27,3 +27,8 @@ output "cloudwatch_log_group" {
   description = "CloudWatch log group used by ECS containers."
   value       = aws_cloudwatch_log_group.ecs.name
 }
+
+output "cloudwatch_dashboard_name" {
+  description = "CloudWatch dashboard created for the project."
+  value       = aws_cloudwatch_dashboard.app.dashboard_name
+}

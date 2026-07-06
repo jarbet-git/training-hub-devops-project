@@ -286,3 +286,65 @@ resource "aws_ecs_service" "app" {
 
   tags = local.tags
 }
+
+resource "aws_cloudwatch_dashboard" "app" {
+  dashboard_name = "${var.project_name}-dashboard"
+
+  dashboard_body = jsonencode({
+    widgets = [
+      {
+        type   = "metric"
+        x      = 0
+        y      = 0
+        width  = 12
+        height = 6
+
+        properties = {
+          title   = "ECS service CPU and memory utilization"
+          region  = var.aws_region
+          view    = "timeSeries"
+          stacked = false
+          period  = 300
+          stat    = "Average"
+          metrics = [
+            ["AWS/ECS", "CPUUtilization", "ClusterName", aws_ecs_cluster.app.name, "ServiceName", aws_ecs_service.app.name],
+            [".", "MemoryUtilization", ".", ".", ".", "."]
+          ]
+        }
+      },
+      {
+        type   = "metric"
+        x      = 12
+        y      = 0
+        width  = 12
+        height = 6
+
+        properties = {
+          title   = "ALB request count and target response time"
+          region  = var.aws_region
+          view    = "timeSeries"
+          stacked = false
+          period  = 300
+          metrics = [
+            ["AWS/ApplicationELB", "RequestCount", "LoadBalancer", aws_lb.app.arn_suffix, { stat = "Sum" }],
+            [".", "TargetResponseTime", ".", ".", { stat = "Average" }]
+          ]
+        }
+      },
+      {
+        type   = "log"
+        x      = 0
+        y      = 6
+        width  = 24
+        height = 6
+
+        properties = {
+          title  = "Recent ECS container logs"
+          region = var.aws_region
+          view   = "table"
+          query  = "SOURCE '${aws_cloudwatch_log_group.ecs.name}' | fields @timestamp, @logStream, @message | sort @timestamp desc | limit 20"
+        }
+      }
+    ]
+  })
+}
