@@ -1,57 +1,127 @@
 # Betcloud Training Hub
 
-Training Hub is a demo web application prepared as a DevOps student project.  
-The application supports training request handling, mandatory training records, training proposals and notifications for **Betcloud**.
+**Training Hub** is a containerized web application prepared for a DevOps project.
+The application represents a simple training management platform for **Betcloud**.
 
-The main purpose of this project is not application complexity, but a complete DevOps process:
+The main purpose of this repository is to demonstrate a complete DevOps delivery process: application build, automated tests, Docker image creation, image publishing, infrastructure provisioning and deployment to AWS.
 
-- containerized application,
-- automated tests,
-- Docker image build,
-- image publishing to Amazon ECR,
+## Project information
+
+| Field | Value |
+|---|---|
+| Application | Training Hub |
+| Company | Betcloud |
+| Author | Jarosław Bętkowski |
+| Runtime platform | Amazon ECS Fargate |
+| Container registry | Amazon ECR |
+| Infrastructure as Code | Terraform |
+| CI/CD | GitHub Actions |
+| Observability | Amazon CloudWatch |
+
+## Overview
+
+Training Hub contains a frontend application, backend API and PostgreSQL database.
+The application exposes health, version and business endpoints required for deployment verification and CI/CD smoke tests.
+
+The project includes:
+
+- application source code,
+- Dockerfile and Docker Compose configuration,
+- automated backend tests,
+- GitHub Actions CI/CD workflows,
+- Docker image publishing to Amazon ECR,
 - deployment to Amazon ECS Fargate,
-- infrastructure managed with Terraform,
-- application logs available in Amazon CloudWatch.
-
-## Author
-
-Jarosław Bętkowski
-
-## Company
-
-Betcloud
+- AWS infrastructure defined in Terraform,
+- CloudWatch logs, dashboard and alarms,
+- SNS email notifications,
+- ECR lifecycle policy,
+- Trivy image security scan,
+- manual rollback workflow.
 
 ## Technology stack
 
-The application uses:
-
-- React and Vite for the frontend,
-- FastAPI for the backend,
-- PostgreSQL as the database,
-- Alembic for database migrations,
-- Docker and Docker Compose for containerization,
-- GitHub Actions for CI/CD,
-- Terraform for Infrastructure as Code,
-- Amazon ECR for Docker image storage,
-- Amazon ECS Fargate for running containers,
-- Application Load Balancer as the public entry point,
-- Amazon CloudWatch Logs for observability.
+| Area | Technology |
+|---|---|
+| Frontend | React, Vite |
+| Backend | FastAPI |
+| Database | PostgreSQL |
+| Migrations | Alembic |
+| Containerization | Docker, Docker Compose |
+| CI/CD | GitHub Actions |
+| Infrastructure | Terraform |
+| Registry | Amazon ECR |
+| Deployment | Amazon ECS Fargate |
+| Public access | Application Load Balancer |
+| Logs and monitoring | Amazon CloudWatch |
+| Notifications | Amazon SNS |
+| Image scanning | Trivy |
 
 ## Architecture
 
-Target deployment architecture:
+```mermaid
+flowchart LR
+    Developer[Developer] --> GitHub[GitHub Repository]
+    GitHub --> Actions[GitHub Actions]
+    Actions --> Tests[Automated Tests]
+    Tests --> DockerBuild[Docker Image Build]
+    DockerBuild --> Trivy[Trivy Image Scan]
+    Trivy --> ECR[Amazon ECR]
+    ECR --> ECS[Amazon ECS Fargate]
+    ECS --> ALB[Application Load Balancer]
+    ALB --> User[Public User]
+
+    ECS --> Logs[CloudWatch Logs]
+    ECS --> Dashboard[CloudWatch Dashboard]
+    ECS --> Alarms[CloudWatch Alarms]
+    Alarms --> SNS[Amazon SNS Email]
+```
+
+Deployment flow:
 
 ```text
 GitHub → GitHub Actions → Amazon ECR → Amazon ECS Fargate → Application Load Balancer → Public URL
-                                                                    ↓
-                                                            Amazon CloudWatch Logs
 ```
 
-The infrastructure is defined in Terraform and stored in the `infra/` directory.
+## CI/CD process
+
+The CI/CD process is split into separate workflows for validation, deployment and rollback.
+
+```mermaid
+flowchart TD
+    A[Feature branch] --> B[Pull Request]
+    B --> C[CI workflow]
+    C --> D[Backend tests]
+    C --> E[Frontend build]
+    C --> F[Docker build validation]
+    D --> G[Merge to main]
+    E --> G
+    F --> G
+    G --> H[Deployment workflow]
+    H --> I[Read version from VERSION file]
+    I --> J[Build Docker image]
+    J --> K[Run Trivy scan]
+    K --> L[Tag Docker image]
+    L --> M[Push image to Amazon ECR]
+    M --> N[Update ECS service]
+    N --> O[Wait for service stability]
+    O --> P[Run smoke tests]
+```
+
+The deployment workflow performs the following actions automatically:
+
+1. Runs backend tests.
+2. Builds the frontend.
+3. Builds the Docker image.
+4. Scans the Docker image with Trivy.
+5. Tags the image as `latest` and with the version from the `VERSION` file.
+6. Pushes both tags to Amazon ECR.
+7. Forces a new deployment of the ECS service.
+8. Waits until the ECS service is stable.
+9. Runs smoke tests against the public URL.
 
 ## Application endpoints
 
-The project exposes the required endpoints:
+Required endpoints:
 
 ```text
 GET /health
@@ -59,7 +129,7 @@ GET /version
 GET /training-process
 ```
 
-Additional API endpoints are also available:
+Additional API endpoints:
 
 ```text
 GET /api/health
@@ -68,16 +138,37 @@ GET /api/training-process
 GET /api/docs
 ```
 
-Endpoint description:
+| Endpoint | Description |
+|---|---|
+| `/health` | Health check endpoint used by AWS load balancer and smoke tests |
+| `/version` | Returns the currently deployed application version |
+| `/training-process` | Business endpoint for the Training Hub domain |
+| `/api/docs` | FastAPI OpenAPI documentation |
 
-- `/health` - health check endpoint used for monitoring and load balancer health checks,
-- `/version` - returns the currently deployed application version,
-- `/training-process` - business endpoint required by the project,
-- `/api/docs` - OpenAPI documentation generated by FastAPI.
+## Public URL
+
+```text
+http://training-hub-alb-1068184646.eu-central-1.elb.amazonaws.com
+```
+
+Production endpoint checks:
+
+```bash
+curl http://training-hub-alb-1068184646.eu-central-1.elb.amazonaws.com/health
+curl http://training-hub-alb-1068184646.eu-central-1.elb.amazonaws.com/version
+curl http://training-hub-alb-1068184646.eu-central-1.elb.amazonaws.com/training-process
+```
+
+The same URL is available as Terraform output:
+
+```bash
+cd infra
+terraform output application_url
+```
 
 ## Demo account
 
-A demo account is created automatically during application startup.
+A demo account is created during application startup.
 
 ```text
 login: demo
@@ -90,9 +181,11 @@ Alternative login:
 demo@example.com
 ```
 
-## Run locally with Docker
+The deployment contains demo data only.
 
-From the repository root:
+## Local Docker run
+
+Start the application locally:
 
 ```bash
 docker compose up --build
@@ -104,7 +197,7 @@ Open the application:
 http://localhost:8000
 ```
 
-Useful local checks:
+Check local endpoints:
 
 ```bash
 curl http://localhost:8000/health
@@ -112,27 +205,27 @@ curl http://localhost:8000/version
 curl http://localhost:8000/training-process
 ```
 
-Stop the environment:
+Stop containers:
 
 ```bash
 docker compose down
 ```
 
-Stop the environment and remove local database volumes:
+Stop containers and remove local volumes:
 
 ```bash
 docker compose down -v
 ```
 
-## Local development mode
+## Local development
 
-Start only PostgreSQL:
+Start PostgreSQL for local development:
 
 ```bash
 docker compose -f docker-compose.dev.yml up -d
 ```
 
-Backend:
+Start backend:
 
 ```bash
 cd backend
@@ -143,7 +236,7 @@ python seed_demo.py
 uvicorn app.main:app --reload
 ```
 
-Frontend:
+Start frontend:
 
 ```bash
 cd frontend
@@ -151,7 +244,9 @@ npm ci
 npm run dev
 ```
 
-## Run backend tests
+## Tests
+
+Run backend tests:
 
 ```bash
 cd backend
@@ -163,41 +258,38 @@ pytest
 
 ## Docker image
 
-The main Dockerfile is located in the repository root:
+The application image is built from the root `Dockerfile`.
 
-```text
-Dockerfile
-```
+The image contains:
 
-The container runs the FastAPI backend and serves the built frontend from the same application container.
+- built frontend assets,
+- FastAPI backend,
+- application version from the `VERSION` file.
 
-The local Docker Compose setup starts:
-
-- application container,
-- PostgreSQL database container.
+The container exposes port `8000`.
 
 ## Infrastructure as Code
 
-Terraform files are stored in:
+Terraform configuration is stored in the `infra/` directory.
 
-```text
-infra/
-```
-
-The Terraform configuration creates the following AWS resources:
+The infrastructure includes:
 
 - Amazon ECR repository,
 - Amazon ECS Fargate cluster,
 - ECS task definition,
 - ECS service,
 - Application Load Balancer,
-- Target Group with `/health` health check,
-- Security Group for ALB,
-- Security Group for ECS tasks,
+- target group with `/health` health check,
+- security group for the load balancer,
+- security group for ECS tasks,
 - IAM role for ECS task execution,
-- CloudWatch Log Group.
+- CloudWatch Log Group,
+- CloudWatch Dashboard,
+- CloudWatch Alarms,
+- SNS topic for alarm notifications,
+- ECR lifecycle policy.
 
-Basic Terraform commands:
+Terraform commands:
 
 ```bash
 cd infra
@@ -207,78 +299,132 @@ terraform plan
 terraform apply
 ```
 
-To remove AWS resources after the project presentation:
+Destroy infrastructure:
 
 ```bash
 terraform destroy
 ```
 
-Terraform state files must not be committed to the repository.
+Terraform state files and local variable files are excluded from the repository.
 
-## AWS deployment
+## AWS resources
 
-The application is deployed on AWS using:
+```mermaid
+flowchart TB
+    ECR[Amazon ECR Repository] --> ECS[ECS Fargate Service]
+    ECS --> Task[ECS Task Definition]
 
-```text
-Amazon ECR → Amazon ECS Fargate → Application Load Balancer
+    Task --> App[Application Container]
+    Task --> DB[PostgreSQL Container]
+
+    ALB[Application Load Balancer] --> TG[Target Group]
+    TG --> ECS
+
+    ECS --> Logs[CloudWatch Logs]
+    ECS --> Dashboard[CloudWatch Dashboard]
+    ECS --> Alarms[CloudWatch Alarms]
+    Alarms --> SNS[SNS Email Notifications]
 ```
 
-Public application URL:
+Main AWS resources:
 
-```text
-http://training-hub-alb-1068184646.eu-central-1.elb.amazonaws.com
-```
-
-Replace `http://training-hub-alb-1068184646.eu-central-1.elb.amazonaws.com` with the Application Load Balancer URL returned by Terraform output:
-
-```bash
-cd infra
-terraform output application_url
-```
-
-Example production checks:
-
-```bash
-curl http://training-hub-alb-1068184646.eu-central-1.elb.amazonaws.com/health
-curl http://training-hub-alb-1068184646.eu-central-1.elb.amazonaws.com/version
-curl http://training-hub-alb-1068184646.eu-central-1.elb.amazonaws.com/training-process
-```
+| Resource | Name |
+|---|---|
+| ECR repository | `training-hub` |
+| ECS cluster | `training-hub-cluster` |
+| ECS service | `training-hub-service` |
+| ECS task family | `training-hub-task` |
+| ALB | `training-hub-alb` |
+| Target group | `training-hub-tg` |
+| CloudWatch Log Group | `/ecs/training-hub` |
+| CloudWatch Dashboard | `training-hub-dashboard` |
+| SNS topic | `training-hub-alarms` |
 
 ## Observability
 
-Application and database logs are available in Amazon CloudWatch Logs.
+The application is monitored using AWS-native services.
 
-Log group:
+Implemented observability elements:
+
+- `/health` endpoint,
+- ALB target group health checks,
+- CloudWatch Logs,
+- CloudWatch Dashboard,
+- CloudWatch Alarms,
+- SNS email notifications.
+
+Configured alarms:
+
+| Alarm | Description |
+|---|---|
+| `training-hub-ecs-high-cpu` | ECS service CPU utilization alarm |
+| `training-hub-alb-target-5xx` | Target group HTTP 5XX response alarm |
+| `training-hub-alb-unhealthy-targets` | Unhealthy target count alarm |
+
+The alarm notification email is provided through a local Terraform variable and is not stored in the repository.
+
+## Security and maintenance
+
+The deployment pipeline includes a Docker image scan using Trivy.
+
+The scan checks:
+
+- operating system packages,
+- application dependencies,
+- HIGH and CRITICAL vulnerabilities.
+
+The scan is informational and visible in GitHub Actions logs.
+
+Amazon ECR lifecycle policy is managed by Terraform.
+
+Image cleanup rules:
+
+- keep the last 10 tagged images,
+- remove untagged images older than 7 days.
+
+Secrets used by CI/CD are stored in GitHub Actions secrets and are not committed to the repository.
+
+## Manual rollback
+
+The repository includes a manual rollback workflow:
 
 ```text
-/ecs/training-hub
+.github/workflows/rollback.yml
 ```
 
-The `/health` endpoint is also used by the Application Load Balancer Target Group health check.
+Rollback process:
 
-## CI/CD
+```mermaid
+flowchart LR
+    A[Existing ECR image tag] --> B[Manual rollback workflow]
+    B --> C[Verify image exists]
+    C --> D[Move latest tag]
+    D --> E[Force ECS deployment]
+    E --> F[Wait for service stability]
+    F --> G[Run smoke tests]
+```
 
-GitHub Actions is used for CI/CD.
+The workflow accepts an existing ECR image tag, moves the `latest` tag to that image, forces a new ECS deployment and verifies the deployment with smoke tests.
 
-The CI workflow is responsible for:
+Example image tag:
 
-- installing backend dependencies,
-- running backend tests,
-- installing frontend dependencies,
-- building the frontend,
-- validating Docker image build.
+```text
+0.9.5-docker-demo
+```
 
-The deployment workflow is responsible for:
+## GitHub Actions
 
-- running tests,
-- building the Docker image,
-- logging in to Amazon ECR,
-- pushing the image to ECR,
-- forcing a new ECS service deployment.
+Workflows:
 
-## Required GitHub Actions secrets
+| Workflow | Purpose |
+|---|---|
+| `ci.yml` | Runs tests, builds frontend and validates Docker image build |
+| `deploy.yml` | Builds, scans, publishes and deploys the application |
+| `rollback.yml` | Performs manual rollback to an existing ECR image tag |
 
-The repository requires the following GitHub Actions secrets for AWS deployment:
+## GitHub Actions configuration
+
+Required repository secrets:
 
 ```text
 AWS_ACCESS_KEY_ID
@@ -290,26 +436,24 @@ ECS_CLUSTER
 ECS_SERVICE
 ```
 
-Secret values are configured in:
+Required environment variable in the `production` GitHub Environment:
 
 ```text
-GitHub repository → Settings → Secrets and variables → Actions
+APP_PUBLIC_URL
 ```
 
-Secret values are not stored in the repository.
+Secret values are stored in GitHub Actions configuration, not in the repository.
 
-For a production environment, GitHub OIDC with an AWS IAM role would be preferred instead of long-lived AWS access keys.
+## Environment files
 
-## Environment variables
-
-The repository contains only example environment files:
+The repository contains example environment files:
 
 ```text
 .env.example
 frontend/.env.example
 ```
 
-Do not commit real local environment files, for example:
+Real local environment files are ignored by Git:
 
 ```text
 .env
@@ -318,26 +462,27 @@ frontend/.env
 frontend/.env.local
 ```
 
-Local Docker Compose uses demo-safe values so the project can be started quickly during review.
+## Versioned deployment
 
-For AWS deployment, runtime configuration is provided through ECS task definition environment variables and GitHub Actions secrets.
+Application version is stored in the `VERSION` file.
 
-## Version bump for CI/CD demo
-
-For the project recording, change the application version by editing the `VERSION` file.
-
-Example:
+A typical version change is done on a feature branch:
 
 ```bash
-printf "1.0.1\n" > VERSION
+git checkout main
+git pull
+git checkout -b feature/version-bump-demo
+
+printf "0.9.6-docker-demo\n" > VERSION
+
 git add VERSION
-git commit -m "Bump application version to 1.0.1"
-git push origin main
+git commit -m "Bump application version to 0.9.6"
+git push -u origin feature/version-bump-demo
 ```
 
-After the pipeline finishes, the public `/version` endpoint should return the new version.
+After the Pull Request is merged into `main`, the deployment workflow publishes a new Docker image and deploys it to ECS.
 
-Example check:
+Version check:
 
 ```bash
 curl http://training-hub-alb-1068184646.eu-central-1.elb.amazonaws.com/version
@@ -349,9 +494,11 @@ curl http://training-hub-alb-1068184646.eu-central-1.elb.amazonaws.com/version
 .
 ├── backend/
 ├── frontend/
-├── docker/
 ├── infra/
-├── .github/workflows/
+├── docs/
+│   └── screenshots/
+├── .github/
+│   └── workflows/
 ├── Dockerfile
 ├── docker-compose.yml
 ├── docker-compose.dev.yml
@@ -359,75 +506,9 @@ curl http://training-hub-alb-1068184646.eu-central-1.elb.amazonaws.com/version
 └── VERSION
 ```
 
-## Submission notes
+## Database note
 
-The project submission should include:
+For this project, PostgreSQL runs as a sidecar container in the ECS task.
+This keeps the deployment compact and cost-effective while still allowing the application to run with a real database engine.
 
-- GitHub repository link,
-- README.md,
-- public application URL,
-- screen recording link.
-
-The screen recording should show:
-
-- repository structure,
-- Dockerfile,
-- GitHub Actions workflow,
-- Terraform code,
-- Amazon ECR repository,
-- Amazon ECS service,
-- Application Load Balancer,
-- CloudWatch Logs,
-- working `/health`, `/version` and `/training-process` endpoints,
-- CI/CD demonstration after changing the `VERSION` file.
-
-## Additional DevOps features
-
-The project includes several additional DevOps practices:
-
-- Docker images are tagged both as `latest` and with the version from the `VERSION` file.
-- The deployment job uses the GitHub Environment named `production`.
-- After ECS finishes the rollout, the workflow runs smoke tests against the public ALB URL.
-- Smoke tests verify `/health`, `/version` and `/training-process`.
-- Terraform creates a CloudWatch dashboard for basic ECS, ALB and log visibility.
-
-The public application URL is stored as a GitHub Actions environment variable named `APP_PUBLIC_URL`.
-## Reliability, security and rollback
-
-The project also includes additional DevOps practices focused on reliability, security and operational maintenance.
-
-### ECR lifecycle policy
-
-Amazon ECR lifecycle policy is managed by Terraform.
-
-Current cleanup rules:
-
-- keep only the last 10 tagged images,
-- remove untagged images older than 7 days.
-
-This helps keep the image repository clean after multiple CI/CD deployments.
-
-### CloudWatch email alarms
-
-CloudWatch alarms are managed by Terraform and send notifications through Amazon SNS.
-
-Configured alarms:
-
-- ECS high CPU utilization,
-- ALB target 5XX errors,
-- unhealthy ALB targets.
-
-The notification email address is provided through a local Terraform variable and is not stored in the repository.
-
-### Docker image security scan
-
-The deployment workflow scans the Docker image with Trivy before pushing and deploying it.
-
-The scan checks HIGH and CRITICAL vulnerabilities in operating system packages and application libraries. The scan is currently informational and does not block deployment.
-
-### Manual rollback workflow
-
-The repository includes a manual rollback workflow:
-
-```text
-.github/workflows/rollback.yml
+The application and database containers are deployed together as one ECS task.

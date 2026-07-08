@@ -27,3 +27,6 @@ crash.log
 crash.*.log
 *.tfvars
 *.tfvars.json
+
+# Local REST client scratch files
+*.http
