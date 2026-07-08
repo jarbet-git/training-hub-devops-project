@@ -392,3 +392,42 @@ The project includes several additional DevOps practices:
 - Terraform creates a CloudWatch dashboard for basic ECS, ALB and log visibility.
 
 The public application URL is stored as a GitHub Actions environment variable named `APP_PUBLIC_URL`.
+## Reliability, security and rollback
+
+The project also includes additional DevOps practices focused on reliability, security and operational maintenance.
+
+### ECR lifecycle policy
+
+Amazon ECR lifecycle policy is managed by Terraform.
+
+Current cleanup rules:
+
+- keep only the last 10 tagged images,
+- remove untagged images older than 7 days.
+
+This helps keep the image repository clean after multiple CI/CD deployments.
+
+### CloudWatch email alarms
+
+CloudWatch alarms are managed by Terraform and send notifications through Amazon SNS.
+
+Configured alarms:
+
+- ECS high CPU utilization,
+- ALB target 5XX errors,
+- unhealthy ALB targets.
+
+The notification email address is provided through a local Terraform variable and is not stored in the repository.
+
+### Docker image security scan
+
+The deployment workflow scans the Docker image with Trivy before pushing and deploying it.
+
+The scan checks HIGH and CRITICAL vulnerabilities in operating system packages and application libraries. The scan is currently informational and does not block deployment.
+
+### Manual rollback workflow
+
+The repository includes a manual rollback workflow:
+
+```text
+.github/workflows/rollback.yml

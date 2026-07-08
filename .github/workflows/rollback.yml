@@ -1,0 +1,99 @@
+name: Rollback ECS Service
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Existing ECR image tag to roll back to, for example 0.9.5-docker-demo"
+        required: true
+        type: string
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    environment: production
+
+    env:
+      AWS_REGION: "${{ secrets.AWS_REGION }}"
+      AWS_ACCOUNT_ID: "${{ secrets.AWS_ACCOUNT_ID }}"
+      ECR_REPOSITORY: "${{ secrets.ECR_REPOSITORY }}"
+      ECS_CLUSTER: "${{ secrets.ECS_CLUSTER }}"
+      ECS_SERVICE: "${{ secrets.ECS_SERVICE }}"
+      APP_PUBLIC_URL: "${{ vars.APP_PUBLIC_URL }}"
+      ROLLBACK_IMAGE_TAG: "${{ inputs.image_tag }}"
+
+    steps:
+      - name: Validate rollback image tag
+        run: |
+          if [ -z "${ROLLBACK_IMAGE_TAG}" ]; then
+            echo "Rollback image tag is empty"
+            exit 1
+          fi
+
+          if ! echo "${ROLLBACK_IMAGE_TAG}" | grep -Eq '^[A-Za-z0-9_.-]+$'; then
+            echo "Invalid Docker tag: ${ROLLBACK_IMAGE_TAG}"
+            exit 1
+          fi
+
+          echo "Rollback target image tag: ${ROLLBACK_IMAGE_TAG}"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: "${{ secrets.AWS_ACCESS_KEY_ID }}"
+          aws-secret-access-key: "${{ secrets.AWS_SECRET_ACCESS_KEY }}"
+          aws-region: "${{ secrets.AWS_REGION }}"
+
+      - name: Verify rollback image exists in ECR
+        run: |
+          aws ecr describe-images \
+            --repository-name "${ECR_REPOSITORY}" \
+            --image-ids imageTag="${ROLLBACK_IMAGE_TAG}" \
+            --region "${AWS_REGION}"
+
+      - name: Move latest tag to rollback image
+        run: |
+          MANIFEST="$(aws ecr batch-get-image \
+            --repository-name "${ECR_REPOSITORY}" \
+            --image-ids imageTag="${ROLLBACK_IMAGE_TAG}" \
+            --region "${AWS_REGION}" \
+            --query 'images[0].imageManifest' \
+            --output text)"
+
+          aws ecr put-image \
+            --repository-name "${ECR_REPOSITORY}" \
+            --image-tag latest \
+            --image-manifest "${MANIFEST}" \
+            --region "${AWS_REGION}"
+
+          echo "Moved latest tag to ${ROLLBACK_IMAGE_TAG}"
+
+      - name: Force new ECS deployment
+        run: |
+          aws ecs update-service \
+            --cluster "${ECS_CLUSTER}" \
+            --service "${ECS_SERVICE}" \
+            --force-new-deployment \
+            --region "${AWS_REGION}"
+
+      - name: Wait for ECS service stability
+        run: |
+          aws ecs wait services-stable \
+            --cluster "${ECS_CLUSTER}" \
+            --services "${ECS_SERVICE}" \
+            --region "${AWS_REGION}"
+
+      - name: Run rollback smoke tests
+        run: |
+          if [ -z "${APP_PUBLIC_URL}" ]; then
+            echo "APP_PUBLIC_URL variable is not set"
+            exit 1
+          fi
+
+          curl --fail --retry 12 --retry-delay 10 --retry-all-errors "${APP_PUBLIC_URL}/health"
+
+          VERSION_RESPONSE="$(curl --fail --retry 12 --retry-delay 10 --retry-all-errors "${APP_PUBLIC_URL}/version")"
+          echo "Version response: ${VERSION_RESPONSE}"
+          echo "${VERSION_RESPONSE}" | grep "${ROLLBACK_IMAGE_TAG}"
+
+          curl --fail --retry 12 --retry-delay 10 --retry-all-errors "${APP_PUBLIC_URL}/training-process"

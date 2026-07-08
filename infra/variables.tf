@@ -81,3 +81,9 @@ locals {
     ManagedBy   = "Terraform"
   }
 }
+
+variable "alarm_email" {
+  description = "Email address used for CloudWatch alarm notifications through SNS. Keep the real value outside the repository."
+  type        = string
+  default     = ""
+}
