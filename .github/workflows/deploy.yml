@@ -86,6 +86,17 @@ jobs:
         run: |
           docker build -t training-hub:latest .
 
+      - name: Scan Docker image with Trivy
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy:latest image \
+            --exit-code 0 \
+            --ignore-unfixed \
+            --severity HIGH,CRITICAL \
+            --format table \
+            training-hub:latest
+
       - name: Tag Docker image for ECR
         run: |
           IMAGE_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}"

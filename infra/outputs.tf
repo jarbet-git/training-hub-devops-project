@@ -32,3 +32,13 @@ output "cloudwatch_dashboard_name" {
   description = "CloudWatch dashboard created for the project."
   value       = aws_cloudwatch_dashboard.app.dashboard_name
 }
+
+output "alarm_topic_name" {
+  description = "SNS topic used for CloudWatch alarm notifications."
+  value       = aws_sns_topic.alarms.name
+}
+
+output "alarm_email_subscription_enabled" {
+  description = "Shows whether email subscription was configured for alarm notifications."
+  value       = var.alarm_email != ""
+}
